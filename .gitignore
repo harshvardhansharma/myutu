@@ -1,0 +1,6 @@
+# Arduino build artefacts
+build/
+*.bin
+*.elf
+*.hex
+.DS_Store

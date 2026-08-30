@@ -34,8 +34,8 @@ in electronics).
 | 1 | **ESP32 DevKit** (SquadPixel, DOIT-style, micro-USB) | Main MCU. CH340 USB-serial chip. |
 | 2 | **1.28" round TFT display** (GC9A01, 240×240, IPS) | Color, SPI. The pet's face. |
 | 3 | **MPU6050** accelerometer + gyroscope | Tap / shake / tilt detection (I2C). |
-| 4 | **TTP223** capacitive touch sensor | Head-pat / touch detection. |
-| 5 | **LM393 LDR** light sensor module | Ambient light → sleep when dark. Uses analog out (AO). |
+| 4 | ~~**TTP223** capacitive touch~~ | **DROPPED** — accelerometer covers interaction. |
+| 5 | ~~**LM393 LDR** light sensor~~ | **DROPPED** — see Step 4. |
 | 6 | **3.7V 1000mAh LiPo** battery (JST) | Power cell. |
 | 7 | **TP4056 USB-C** charging module (with DW01 protection) | LiPo charging + protection. |
 | 8 | **Breadboard + jumper wires** | Prototyping (not in final build). |
@@ -246,9 +246,11 @@ Do NOT connect the battery until display + sensors + animations all work on USB.
 - [x] **Step 1 — Display.** ✅ Colour floods, orientation and blinking eyes all render.
       **Confirmed settings: `rotation = 0`, `IPS = true`.** Sketch: `step1_display_test/`.
 - [ ] **Step 2 — MPU6050.** Wire I2C, confirm accelerometer values change on tilt.
-- [ ] **Step 3 — TTP223.** (deferred) Would replace double-tap as the trigger for `happy`. `digitalRead(13)` goes HIGH on touch.
-- [x] **Step 4 — LDR.** ✅ Dark → sleeps immediately, overriding the idle timer; light
-      → wakes with a `surprised`. Debounced 800 ms so shadows don't trigger it. `analogRead(34)` swings when covered; note bright/dark thresholds.
+- [–] **Step 3 — TTP223. DROPPED.** The accelerometer covers interaction on its own;
+      `happy` is a double tap. One less module, three fewer wires. `digitalRead(13)` goes HIGH on touch.
+- [–] **Step 4 — LDR. DROPPED.** Worked and was verified (see `d2cab64`), but wiring it
+      destabilised the breadboard. `sleeping` is now an idle timeout only.
+      Restore with: `git checkout d2cab64 -- myutu_pet/myutu_pet.ino` `analogRead(34)` swings when covered; note bright/dark thresholds.
 - [~] **Step 5 — Emotion state machine.** Renderer and state machine DONE; sensors partial. sleep → wake → joy → dizzy → idle-decay, drawing
       real faces on the round display. **Faces are already designed and verified on glass**
       — see `faces_showcase/` and the Expression Design section below. What's left is
@@ -330,6 +332,24 @@ structure. Note: it uses a monochrome OLED + WiFi, so its GFX/drawing code is **
 directly portable to our round color GC9A01 — reuse the logic, rewrite the rendering.
 
 https://living.ai/emo/ expressions
+
+---
+
+## Scope Decision — accelerometer only
+
+The TTP223 and the LDR are both dropped. The MPU6050 alone distinguishes tap, double tap,
+triple tap, tilt, shake, repeat-shake and free fall — enough for all ten expressions.
+
+What this buys: **9 wires instead of 15**, two fewer modules to fit in the enclosure, a
+lower BOM, and two fewer things that can work loose. Wiring faults, not code, consumed
+most of the bring-up effort, so fewer connections is a real reliability gain.
+
+What it costs: no pat (a double tap stands in), and no "sleeps when the room goes dark" —
+which was the headline behaviour in the original concept. `sleeping` is an idle timeout.
+
+**Consequence for Step 6:** the MPU is now the ONLY input, so it is also the only thing
+that can wake the ESP32 from deep sleep. Wiring its `INT` pin to GPIO27 stops being
+optional — it's the difference between hours and days of battery life.
 
 ---
 

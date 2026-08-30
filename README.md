@@ -2,8 +2,8 @@
 
 An ESP32-based desktop pet — a Tamagotchi-style desk toy that shows emotions on a
 round color display and reacts to touch, motion, and ambient light. **No AI, no WiFi,
-no server, no subscriptions.** All logic runs locally on the ESP32. Battery-powered,
-cordless, giftable.
+no server, no subscriptions.** All logic runs locally on the ESP32. **USB-powered**,
+always on, giftable.
 
 Think: a tiny living creature on your desk that sleeps when the room goes dark, wakes
 when you tap it, feels joy when you pat it, and gets dizzy when you shake it.
@@ -36,18 +36,17 @@ in electronics).
 | 3 | **MPU6050** accelerometer + gyroscope | Tap / shake / tilt detection (I2C). |
 | 4 | ~~**TTP223** capacitive touch~~ | **DROPPED** — accelerometer covers interaction. |
 | 5 | ~~**LM393 LDR** light sensor~~ | **DROPPED** — see Step 4. |
-| 6 | **3.7V 1000mAh LiPo** battery (JST) | Power cell. |
-| 7 | **TP4056 USB-C** charging module (with DW01 protection) | LiPo charging + protection. |
+| 6 | ~~**3.7V 1000mAh LiPo** battery~~ | **NOT USED** — see Scope Decision. |
+| 7 | ~~**TP4056 USB-C** charging module~~ | **NOT USED** — see Scope Decision. |
 | 8 | **Breadboard + jumper wires** | Prototyping (not in final build). |
 
 ### Soldering kit (one-time tools)
 63/37 solder wire · flux paste · adjustable-temp soldering iron kit · silicone heat mat.
 
-### ⚠️ Known hardware gap — not yet ordered
-The TP4056 outputs ~3.7–4.2V from the LiPo. This can't safely feed the ESP32's 3V3 pin,
-and VIN/5V browns out as the battery drains. **Add a small MT3608 boost converter (~₹40)**
-to step 3.7V → 5V into VIN before testing battery-powered operation. Not needed for the
-USB-powered dev phase.
+### Power: USB only
+No boost converter, no charging circuit, no battery. The ESP32's micro-USB feeds
+everything; the onboard regulator supplies 3V3 to the display and MPU. The MT3608 and
+slide switch that were ordered are now spares.
 
 ---
 
@@ -255,7 +254,8 @@ Do NOT connect the battery until display + sensors + animations all work on USB.
       real faces on the round display. **Faces are already designed and verified on glass**
       — see `faces_showcase/` and the Expression Design section below. What's left is
       wiring sensor events to them, not drawing them.
-- [ ] **Step 6 — Power.** Add MT3608 boost → VIN, test on LiPo, tune power/sleep.
+- [–] **Step 6 — Power. DROPPED.** USB-powered; nothing to build. No boost converter,
+      no charging circuit, no deep-sleep firmware needed.
 - [ ] **Step 7 — Enclosure.** 3D-printed shell (see reference below).
 
 ### Display init snippet (Step 1 starting point)
@@ -332,6 +332,26 @@ structure. Note: it uses a monochrome OLED + WiFi, so its GFX/drawing code is **
 directly portable to our round color GC9A01 — reuse the logic, rewrite the rendering.
 
 https://living.ai/emo/ expressions
+
+---
+
+## Scope Decision — USB powered, not battery
+
+**Dropped: the battery, the TP4056, the MT3608, the power switch, and deep sleep.**
+Myutu runs from the ESP32's USB port and is always on.
+
+What this buys: no charging circuit, no LiPo safety concerns, no boost converter to set
+up, and — the big one — **no deep-sleep firmware**. Sleep would have been the largest
+remaining software task, and it would have restructured the state machine so that
+`sleeping` became a power state rather than a face. All of that is now unnecessary.
+The enclosure also loses its bulkiest component: a 1000 mAh LiPo is ~50 × 30 × 6 mm.
+
+What it costs: the original concept said "battery-powered, cordless". It is now a corded
+desk toy. That is a real positioning change — but a USB cable is how most desk gadgets
+are powered, and it removes every remaining hardware risk from the project.
+
+Still worth having the 8-pin display's `BLK` pin: not for power saving now, but so the
+screen can genuinely dim when the pet gets sleepy.
 
 ---
 

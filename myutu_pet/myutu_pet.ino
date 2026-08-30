@@ -31,6 +31,13 @@
 #define I2C_SDA  32
 #define I2C_SCL  33
 
+// LDR: 3-pin module, digital comparator output only (threshold set by its trimpot).
+// D14, not D34 — GPIO34-39 have no internal pull-up, and an open-drain DO would float.
+// MEASURED polarity on this module: DO reads HIGH when dark, LOW in room light.
+#define LDR_PIN  14
+#define DARK_HIGH   1
+#define DARK_STABLE_MS 800     // light must hold its state this long before it counts
+
 Arduino_DataBus *bus = new Arduino_ESP32SPI(
     TFT_DC, TFT_CS, TFT_SCK, TFT_MOSI, GFX_NOT_DEFINED);
 Arduino_GFX *gfx = new Arduino_GC9A01(bus, TFT_RST, 0 /* rotation */, true /* IPS */);
@@ -115,6 +122,8 @@ bool transitioning = false;
 unsigned long transStart = 0;
 unsigned long holdUntil = 0, lastInteraction = 0, lastTapAt = 0, lastEventAt = 0, blinkAt = 0;
 unsigned long tiltSince = 0, lastShakeAt = 0, freefallSince = 0;
+bool isDark = false, lastRawDark = false;
+unsigned long darkChangedAt = 0;
 int tapCount = 0, tiltDir = 0;
 
 // ---------------------------------------------------------------- i2c
@@ -458,6 +467,8 @@ void setup() {
   }
   gfx->fillScreen(BG);
 
+  pinMode(LDR_PIN, INPUT_PULLUP);
+
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(100000);
   mpuOk = initMPU();
@@ -539,11 +550,30 @@ void loop() {
     }
   }
 
+  // Darkness. Debounced in time so a shadow crossing the desk, or a flickering bulb,
+  // can't put the pet to sleep — it has to actually get dark and stay dark.
+  bool rawDark = (digitalRead(LDR_PIN) == DARK_HIGH);
+  if (rawDark != lastRawDark) { lastRawDark = rawDark; darkChangedAt = now; }
+  if (rawDark != isDark && now - darkChangedAt >= DARK_STABLE_MS) {
+    isDark = rawDark;
+    Serial.printf("light: %s\n", isDark ? "dark — going to sleep" : "bright — waking");
+    if (!isDark) {                       // lights came back on: wake with a start
+      lastInteraction = now;
+      enter(SURPRISED, SURPRISED_HOLD);
+    }
+  }
+
   if (now > holdUntil) {
-    unsigned long idle = now - lastInteraction;
-    if      (idle > SLEEPING_AFTER) enter(SLEEPING, 0);
-    else if (idle > SLEEPY_AFTER)   enter(SLEEPY, 0);
-    else                            enter(NEUTRAL, 0);
+    // Darkness overrides the idle timer entirely — the room going dark puts it to sleep
+    // immediately rather than 45 s later. Events still surface while dark (a tap in a
+    // dark room gets a reaction), then it settles straight back to sleep.
+    if (isDark) { if (target != SLEEPING) enter(SLEEPING, 0); }
+    else {
+      unsigned long idle = now - lastInteraction;
+      if      (idle > SLEEPING_AFTER) enter(SLEEPING, 0);
+      else if (idle > SLEEPY_AFTER)   enter(SLEEPY, 0);
+      else                            enter(NEUTRAL, 0);
+    }
   }
 
   // Expressions change by blinking through: the eyes ease shut on the old face, swap at

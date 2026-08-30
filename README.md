@@ -98,7 +98,14 @@ Leave the TTP223 in default **momentary** mode (output HIGH only while touched).
 |------------|------------|
 | VCC | 3V3 |
 | GND | GND |
-| AO (analog out) | GPIO34 (input-only, ADC1 — ideal for analog read) |
+| DO (digital out) | GPIO14 |
+
+⚠️ **The module turned out to be the 3-pin digital-only variant — there is no AO.**
+An LM393 comparator with a trimpot; the threshold is set in hardware by turning the
+screw. That's sufficient here: with the 7-pin display the backlight is hardwired on, so
+a smooth light *level* had nothing to drive anyway.
+**Use GPIO14, not GPIO34** — GPIO34-39 are input-only with **no internal pull-up**, and
+an open-drain DO would float. **Measured polarity: DO reads HIGH when dark.**
 
 ---
 
@@ -240,7 +247,8 @@ Do NOT connect the battery until display + sensors + animations all work on USB.
       **Confirmed settings: `rotation = 0`, `IPS = true`.** Sketch: `step1_display_test/`.
 - [ ] **Step 2 — MPU6050.** Wire I2C, confirm accelerometer values change on tilt.
 - [ ] **Step 3 — TTP223.** (deferred) Would replace double-tap as the trigger for `happy`. `digitalRead(13)` goes HIGH on touch.
-- [ ] **Step 4 — LDR.** (deferred) **Highest-value item left** — restores "sleeps when dark". `analogRead(34)` swings when covered; note bright/dark thresholds.
+- [x] **Step 4 — LDR.** ✅ Dark → sleeps immediately, overriding the idle timer; light
+      → wakes with a `surprised`. Debounced 800 ms so shadows don't trigger it. `analogRead(34)` swings when covered; note bright/dark thresholds.
 - [~] **Step 5 — Emotion state machine.** Renderer and state machine DONE; sensors partial. sleep → wake → joy → dizzy → idle-decay, drawing
       real faces on the round display. **Faces are already designed and verified on glass**
       — see `faces_showcase/` and the Expression Design section below. What's left is
@@ -276,7 +284,7 @@ If the image is mirrored / off-color / garbled, adjust the **rotation** (0–3) 
 | curious | tilt and hold ~0.6 s | asymmetric, tipped, looking into the lean |
 | scared | free fall (accel < 4 m/s²) | small, high, trembling |
 | sleepy | idle 20 s | half-lidded and low, brows drooping outward |
-| sleeping | idle 45 s | small flat lines + Z's drifting up, top right |
+| sleeping | **room goes dark**, or idle 45 s | small flat lines + Z's drifting up, top right |
 
 Rules the design follows — worth keeping when adding to it:
 

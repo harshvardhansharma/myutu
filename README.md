@@ -167,7 +167,28 @@ The board can also be reset on demand by pulsing RTS, which replays `setup()`.
    monitor afterwards captures nothing, because `loop()` is silent and the monitor doesn't
    reset the board. Make bring-up sketches print continuously in `loop()`.
 
-9. **Do not use `Arduino_Canvas` on this build — draw directly to the panel.**
+9. **⚠️ Flicker-free rendering: use TFT_eSPI SPRITES, not Arduino_GFX canvas.**
+    This one cost hours. The flicker is the erase-then-redraw showing on the glass, and
+    the only real cure is composing the frame in RAM and pushing it in one operation.
+    - **`Arduino_Canvas` / `Arduino_Canvas_Indexed` DO NOT WORK on this panel.** They
+      allocate, and `fillScreen` reaches the glass, but `flush()` never lands — black
+      screen. Tested 16-bit and 8-bit indexed, offset and full-size, with and without
+      `Arduino_ESP32SPIDMA`, and in a sketch with no I2C at all. Every explanation
+      offered along the way (I2C crosstalk, DMA conflict, offset addressing) was wrong.
+    - **`TFT_eSPI` + `TFT_eSprite` works.** See `face_lab/`.
+    - A **full-screen 240x240 16-bit sprite is 115 KB and will NOT allocate.**
+      `createSprite` returns null. Use a **band sprite** covering only the rows the face
+      occupies — `face_lab` uses 240x172 at y=28, about 82 KB — and draw in sprite-local
+      coordinates (global y minus the band offset).
+    - Compositing in RAM makes the glow effectively free: five concentric passes for a
+      smooth gradient cost no extra SPI traffic, only the single push does.
+    - **TFT_eSPI pins are compiled into the LIBRARY**, not passed at runtime:
+      `~/Documents/Arduino/libraries/TFT_eSPI/User_Setup.h` (stock kept as `.orig`).
+      That file is global to this machine — any other TFT_eSPI sketch inherits it.
+    - SPI is set to **40 MHz there, not 80**. 80 needs sub-10 cm wiring and produced
+      tearing on this breadboard. Revisit once soldered.
+
+10. **Do not use `Arduino_Canvas` on this build — draw directly to the panel.**
     Tried three ways: 16-bit offset, 8-bit indexed offset, and 8-bit indexed full-size.
     **All three eventually corrupted the panel's addressing**, giving a shifted image that
     wraps around the bottom. Sometimes only after minutes of correct operation, which is
@@ -272,6 +293,12 @@ If the image is mirrored / off-color / garbled, adjust the **rotation** (0–3) 
 ---
 
 ## Expression Design
+
+**`faces/index.html` is the source of truth for face design.** Open it in a browser to see
+all ten expressions as SVG, each shape commented with the exact C++ call and resolved
+arguments that draw it. Edit the SVG there first, then port into `face_lab/face_lab.ino`'s
+`shapes()`, then into `myutu_pet/`.
+
 
 **Ten faces, drawn with eyes alone.** Live in `myutu_pet/` — the pet itself.
 

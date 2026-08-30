@@ -167,7 +167,17 @@ The board can also be reset on demand by pulsing RTS, which replays `setup()`.
    monitor afterwards captures nothing, because `loop()` is silent and the monitor doesn't
    reset the board. Make bring-up sketches print continuously in `loop()`.
 
-9. **⚠️ Flicker-free rendering: use TFT_eSPI SPRITES, not Arduino_GFX canvas.**
+9. **⚠️ Flicker-free rendering: use a TFT_eSPI 4-BIT PALETTE SPRITE.**
+    Two findings, and the second only shows up once the whole pet is running:
+    - **A 16-bit band sprite (240x172 = 82 KB) allocates in a display-only sketch but
+      NOT once the I2C stack is also on the heap.** `createSprite` returns null, the
+      sketch halts, and the screen stays black — which looks exactly like a wiring fault.
+    - **At 4 bits it costs 20.6 KB and the palette is LOSSLESS**, because the face uses
+      exactly 16 colours: background, plus five each of white, red and blue. An 8-bit
+      sprite would be the obvious middle ground and is the wrong choice — 3-3-2 bit
+      colour bands these dark halos badly. Set `setColorDepth(4)` then `createPalette()`,
+      and pass PALETTE INDICES as colours, not RGB565 values.
+    Everything below still applies:
     This one cost hours. The flicker is the erase-then-redraw showing on the glass, and
     the only real cure is composing the frame in RAM and pushing it in one operation.
     - **`Arduino_Canvas` / `Arduino_Canvas_Indexed` DO NOT WORK on this panel.** They
